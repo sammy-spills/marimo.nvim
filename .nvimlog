@@ -58,3 +58,7 @@ WRN 2026-03-13T16:17:45.716 ?.54381    server_start:199: Failed to start server:
 WRN 2026-03-13T16:22:13.384 ?.55580    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/GG2J4N/nvim.55580.0
 WRN 2026-03-13T16:38:51.951 ?.58504    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/kpfAcP/nvim.58504.0
 WRN 2026-03-13T16:40:12.737 ?.59219    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/5h64dx/nvim.59219.0
+WRN 2026-03-13T16:49:55.042 ?.69810    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/aRYP6h/nvim.69810.0
+WRN 2026-03-13T16:50:01.438 ?.69837    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/1DDYcG/nvim.69837.0
+WRN 2026-03-13T16:58:16.060 ?.73206    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/0kbur5/nvim.73206.0
+WRN 2026-03-13T17:05:51.111 ?.75400    server_start:199: Failed to start server: operation not permitted: /var/folders/bf/wl4chnnd38bf5cgpx46xvq0h0000gn/T/nvim.sams/vZuybL/nvim.75400.0

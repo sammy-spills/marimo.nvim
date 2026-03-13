@@ -105,14 +105,16 @@ assert_equal(#extmarks[#extmarks][4].virt_lines, 6, "expected reserved preview s
 
 local header_marks = vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.ns, 0, -1, { details = true })
 assert_equal(#header_marks, #cells, "expected one conceal mark per cell with multi-line headers")
+assert_equal(header_marks[1][2], cells[1].start_line - 1, "expected concealed header marks to begin at the @app.cell line")
 assert_equal(header_marks[2][4].conceal_lines, "", "expected rendered cell headers to conceal remaining decorator and def lines")
 
 local visible_header_marks = vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.header_ns, 0, -1, { details = true })
 assert_equal(#visible_header_marks, #cells, "expected one visible header mark per cell")
-assert_equal(visible_header_marks[1][4].virt_text[1][1], "Cell ", "expected unnamed cells to render a fallback cell label")
-assert_equal(visible_header_marks[1][4].virt_text[2][1], "0", "expected unnamed cell labels to use a zero-based index")
-assert_equal(visible_header_marks[2][4].virt_text[2][1], "1", "expected named cell labels to use a zero-based index")
-assert_equal(visible_header_marks[2][4].virt_text[4][1], "named_cell", "expected cell header to include display name")
+assert_equal(visible_header_marks[1][4].virt_lines[1][1][1], "Cell ", "expected unnamed cells to render a fallback cell label")
+assert_equal(visible_header_marks[1][4].virt_lines[1][2][1], "0", "expected unnamed cell labels to use a zero-based index")
+assert_equal(visible_header_marks[2][4].virt_lines[1][2][1], "1", "expected named cell labels to use a zero-based index")
+assert_equal(visible_header_marks[2][4].virt_lines[1][4][1], "named_cell", "expected cell header to include display name")
+assert_equal(visible_header_marks[1][4].virt_lines_above, true, "expected visible cell headers to render above the concealed cell header")
 
 cell_renderer._mode_override = "i"
 cell_renderer.render(notebook_buf)

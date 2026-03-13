@@ -16,7 +16,7 @@ Lazy.nvim / LazyVim:
 
 ```lua
 {
-  dir = "/Users/sams/Documents/Development/marimo.nvim",
+  "sammy-spills/marimo.nvim",
   ft = "python",
   opts = {},
   keys = require("marimo").lazy_keys(),

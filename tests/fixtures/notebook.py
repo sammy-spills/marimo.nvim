@@ -11,7 +11,7 @@ def __(mo):
 
 
 @app.cell
-def __(x):
+def named_cell(x):
     y = x + 2
     print(f"value: {y}")
     return y

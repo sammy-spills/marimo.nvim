@@ -4,6 +4,7 @@ local parser = require("marimo.parser")
 local session = require("marimo.session")
 local commands = require("marimo.commands")
 local output = require("marimo.output")
+local cells = require("marimo.cells")
 local util = require("marimo.util")
 
 local M = {
@@ -39,8 +40,11 @@ end
 local function on_detected(bufnr, enabled)
   if enabled then
     set_buffer_keymaps(bufnr)
+    cells.render(bufnr)
     output.render(bufnr)
   else
+    cells.clear(bufnr)
+    cells.restore_windows(bufnr)
     output.clear(bufnr)
   end
 end
@@ -61,6 +65,7 @@ function M.setup(opts)
   end
   M._did_setup = true
   commands.create()
+  cells.setup()
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost" }, {
     group = group,
     pattern = "*.py",
@@ -73,8 +78,25 @@ function M.setup(opts)
     pattern = "*.py",
     callback = function(args)
       if detect.is_enabled(args.buf) then
+        cells.render(args.buf)
         output.render(args.buf)
       end
+    end,
+  })
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = "*",
+    callback = function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      if detect.is_enabled(bufnr) then
+        cells.render(bufnr)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = group,
+    callback = function()
+      cells.setup()
     end,
   })
   vim.api.nvim_create_autocmd({ "BufWinLeave", "BufHidden" }, {
@@ -104,6 +126,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd("BufDelete", {
     group = group,
     callback = function(args)
+      cells.clear(args.buf)
       output.clear(args.buf)
     end,
   })
@@ -147,6 +170,8 @@ end
 function M.disable(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   detect.set_enabled(bufnr, false, "manual")
+  cells.clear(bufnr)
+  cells.restore_windows(bufnr)
   output.clear(bufnr)
 end
 

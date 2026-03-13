@@ -5,6 +5,7 @@ local detect = require("marimo.detect")
 local parser = require("marimo.parser")
 local executor = require("marimo.executor")
 local output = require("marimo.output")
+local cell_renderer = require("marimo.cells")
 
 local function assert_truthy(value, message)
   if not value then
@@ -44,6 +45,9 @@ assert_truthy(not script_decision.weak_match, "expected plain python fixture to 
 local cells = parser.parse_buffer(notebook_buf)
 assert_equal(#cells, 4, "expected parser to find four cells")
 assert_truthy(cells[1].code:match("print%(") ~= nil, "expected parser to sanitize cell body")
+assert_equal(cells[1].index, 0, "expected cells to track a zero-based index")
+assert_equal(cells[1].display_name, nil, "expected anonymous cell to have no display name")
+assert_equal(cells[2].display_name, "named_cell", "expected non-placeholder function names to surface as display names")
 assert_truthy(cells[3].code:match("^%s*return") == nil, "expected multiline return to be stripped from execution code")
 assert_truthy(cells[3].code:match("final") ~= nil, "expected multiline return cell body to remain executable")
 assert_equal(cells[4].body_start_line, cells[4].def_end_line + 1, "expected multiline def header to be skipped before body execution")
@@ -67,6 +71,7 @@ end, 50)
 assert_truthy(completed, "expected executor callback to complete")
 
 vim.api.nvim_set_current_buf(notebook_buf)
+marimo.enable(notebook_buf)
 vim.cmd("resize 6")
 
 local current_win = vim.api.nvim_get_current_win()
@@ -97,6 +102,32 @@ assert_truthy(adjusted_view.topline > original_view.topline, "expected viewport 
 local extmarks = vim.api.nvim_buf_get_extmarks(notebook_buf, output.ns, 0, -1, { details = true })
 assert_truthy(#extmarks > 0, "expected output renderer to reserve space for inline floats")
 assert_equal(#extmarks[#extmarks][4].virt_lines, 6, "expected reserved preview space to include inline float borders")
+
+local header_marks = vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.ns, 0, -1, { details = true })
+assert_equal(#header_marks, #cells, "expected one conceal mark per cell with multi-line headers")
+assert_equal(header_marks[1][2], cells[1].start_line - 1, "expected concealed header marks to begin at the @app.cell line")
+assert_equal(header_marks[2][4].conceal_lines, "", "expected rendered cell headers to conceal remaining decorator and def lines")
+
+local visible_header_marks = vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.header_ns, 0, -1, { details = true })
+assert_equal(#visible_header_marks, #cells, "expected one visible header mark per cell")
+assert_equal(visible_header_marks[1][2], cells[1].body_start_line - 1, "expected visible header marks to anchor above the first visible body line")
+assert_equal(visible_header_marks[2][2], cells[2].body_start_line - 1, "expected later visible header marks to anchor above each cell's body")
+assert_equal(visible_header_marks[1][4].virt_lines[1][1][1], "Cell ", "expected unnamed cells to render a fallback cell label")
+assert_equal(visible_header_marks[1][4].virt_lines[1][2][1], "0", "expected unnamed cell labels to use a zero-based index")
+assert_equal(visible_header_marks[2][4].virt_lines[1][2][1], "1", "expected named cell labels to use a zero-based index")
+assert_equal(visible_header_marks[2][4].virt_lines[1][4][1], "named_cell", "expected cell header to include display name")
+assert_equal(visible_header_marks[1][4].virt_lines_above, true, "expected visible cell headers to render above the concealed cell header")
+
+cell_renderer._mode_override = "i"
+cell_renderer.render(notebook_buf)
+assert_equal(#vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.ns, 0, -1, {}), 0, "expected concealed header marks to clear in insert mode")
+assert_equal(#vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.header_ns, 0, -1, {}), 0, "expected visible cell headers to clear in insert mode")
+
+cell_renderer._mode_override = "n"
+cell_renderer.render(notebook_buf)
+assert_equal(#vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.ns, 0, -1, {}), #cells, "expected concealed header marks to restore in normal mode")
+assert_equal(#vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.header_ns, 0, -1, {}), #cells, "expected visible cell headers to restore in normal mode")
+cell_renderer._mode_override = nil
 
 local inline_window_state = output.inline_floats[notebook_buf] and output.inline_floats[notebook_buf][current_win]
 assert_truthy(inline_window_state ~= nil, "expected inline output floats to be tracked per source window")

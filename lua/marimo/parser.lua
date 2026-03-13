@@ -10,6 +10,29 @@ local function is_def(line)
   return line:match("^%s*def%s+[%w_]+%s*%(") ~= nil
 end
 
+local function parse_function_name(line)
+  return line:match("^%s*def%s+([%w_]+)%s*%(")
+end
+
+local function parse_decorator_name(lines)
+  local text = table.concat(lines, "\n")
+  return text:match('name%s*=%s*"([^"]+)"') or text:match("name%s*=%s*'([^']+)'")
+end
+
+local function display_name_for_cell(decorator_lines, def_line)
+  local decorator_name = parse_decorator_name(decorator_lines)
+  if decorator_name and decorator_name ~= "" then
+    return decorator_name
+  end
+
+  local function_name = parse_function_name(def_line)
+  if function_name and function_name ~= "__" then
+    return function_name
+  end
+
+  return nil
+end
+
 local function find_def_end(lines, def_line)
   local balance = 0
   local saw_open_paren = false
@@ -88,6 +111,9 @@ function M.parse_lines(lines)
       local def_end_line = find_def_end(lines, def_line)
       local body_start = def_end_line + 1
       local def_indent = #(lines[def_line]:match("^(%s*)") or "")
+      local decorator_lines = util.list_slice(lines, decorator_line, def_line - 1)
+      local function_name = parse_function_name(lines[def_line])
+      local display_name = display_name_for_cell(decorator_lines, lines[def_line])
       local body_end = body_start - 1
       local scan = body_start
       while scan <= #lines do
@@ -113,10 +139,14 @@ function M.parse_lines(lines)
       local exec_lines = sanitize_exec_lines(dedented)
       table.insert(cells, {
         id = #cells + 1,
+        index = #cells,
         start_line = decorator_line,
         def_line = def_line,
         def_end_line = def_end_line,
         end_line = end_line,
+        decorator_lines = decorator_lines,
+        function_name = function_name,
+        display_name = display_name,
         body_start_line = body_start,
         body_end_line = body_end,
         body_lines = dedented,

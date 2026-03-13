@@ -101,7 +101,7 @@ function M.render(bufnr)
 
 	local cells = parser.parse_buffer(bufnr)
 	for _, cell in ipairs(cells) do
-		local header_row = math.max(cell.start_line - 2, 0)
+		local header_row = math.max(cell.body_start_line - 1, 0)
 		vim.api.nvim_buf_set_extmark(bufnr, M.header_ns, header_row, 0, {
 			virt_lines = {
 				header_chunks(cell),

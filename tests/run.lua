@@ -110,6 +110,8 @@ assert_equal(header_marks[2][4].conceal_lines, "", "expected rendered cell heade
 
 local visible_header_marks = vim.api.nvim_buf_get_extmarks(notebook_buf, cell_renderer.header_ns, 0, -1, { details = true })
 assert_equal(#visible_header_marks, #cells, "expected one visible header mark per cell")
+assert_equal(visible_header_marks[1][2], cells[1].body_start_line - 1, "expected visible header marks to anchor above the first visible body line")
+assert_equal(visible_header_marks[2][2], cells[2].body_start_line - 1, "expected later visible header marks to anchor above each cell's body")
 assert_equal(visible_header_marks[1][4].virt_lines[1][1][1], "Cell ", "expected unnamed cells to render a fallback cell label")
 assert_equal(visible_header_marks[1][4].virt_lines[1][2][1], "0", "expected unnamed cell labels to use a zero-based index")
 assert_equal(visible_header_marks[2][4].virt_lines[1][2][1], "1", "expected named cell labels to use a zero-based index")

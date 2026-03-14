@@ -8,6 +8,11 @@ local root_markers = {
   ".venv",
 }
 
+local uv_project_markers = {
+  "pyproject.toml",
+  "uv.lock",
+}
+
 function M.notify(message, level)
   vim.schedule(function()
     vim.notify(message, level or vim.log.levels.INFO, { title = "marimo.nvim" })
@@ -41,6 +46,18 @@ function M.find_root(path)
   end
   local root = vim.fs.root(start, root_markers)
   return root or start or vim.uv.cwd()
+end
+
+function M.find_uv_project_root(path)
+  local start = path
+  if start == "" then
+    start = vim.uv.cwd()
+  end
+  local stat = vim.uv.fs_stat(start)
+  if stat and stat.type == "file" then
+    start = vim.fs.dirname(start)
+  end
+  return vim.fs.root(start, uv_project_markers)
 end
 
 function M.command_exists(cmd)

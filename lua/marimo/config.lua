@@ -9,9 +9,11 @@ M.defaults = {
     debounce_ms = 150,
   },
   commands = {
+    uv = "uv",
     uvx = "uvx",
     marimo = "marimo",
     python = "python3",
+    curl = "curl",
     headless = true,
     check_format = "json",
   },

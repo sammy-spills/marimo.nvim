@@ -1,87 +1,91 @@
 local parser = require("marimo.parser")
-local util = require("marimo.util")
-local config = require("marimo.config")
+local transport = require("marimo.transport")
 
 local M = {}
 
-local function python_command(root)
-  if util.command_exists("uv") and util.file_exists(root .. "/pyproject.toml") then
-    return { "uv", "run", "python" }
+local function backend_mapping(bufnr)
+  local cells = parser.parse_buffer(bufnr)
+  local backend_ids = transport.get_cell_ids(bufnr)
+  if #cells ~= #backend_ids then
+    return nil, nil, ("Notebook structure changed: local cells=%d, marimo cells=%d"):format(#cells, #backend_ids)
   end
-  return { config.get().commands.python }
+
+  local local_by_backend = {}
+  for index, backend_id in ipairs(backend_ids) do
+    local_by_backend[backend_id] = cells[index].id
+  end
+  return cells, local_by_backend
 end
 
-local function build_runner_script(cells, current_index)
-  local payload = {}
-  for index, cell in ipairs(cells) do
-    table.insert(payload, {
-      id = index,
-      code = cell.code,
-      capture = current_index == nil or index == current_index,
-    })
+local function convert_result(bufnr, touched_backend_ids, snapshot)
+  local _, local_by_backend, err = backend_mapping(bufnr)
+  if err then
+    return nil, err
   end
-  local json = vim.json.encode(payload)
-  return table.concat({
-    "import contextlib",
-    "import io",
-    "import json",
-    "import traceback",
-    "",
-    "cells = json.loads(" .. string.format("%q", json) .. ")",
-    "env = {}",
-    "results = []",
-    "for cell in cells:",
-    "    stdout = io.StringIO()",
-    "    stderr = io.StringIO()",
-    "    item = {'id': cell['id'], 'kind': 'text', 'lines': []}",
-    "    try:",
-    "        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):",
-    "            exec(cell['code'], env, env)",
-    "        combined = stdout.getvalue() + stderr.getvalue()",
-    "        item['lines'] = combined.splitlines() if combined else ['<no output>']",
-    "    except Exception:",
-    "        item['kind'] = 'error'",
-    "        item['lines'] = traceback.format_exc().splitlines()",
-    "        results.append(item)",
-    "        break",
-    "    results.append(item)",
-    "print(json.dumps(results))",
-  }, "\n")
+  return transport._snapshot_to_output_items(touched_backend_ids, snapshot, local_by_backend)
 end
 
-local function run_python(root, script, callback)
-  local script_path = vim.fn.tempname() .. ".py"
-  vim.fn.writefile(vim.split(script, "\n", { plain = true }), script_path)
-  local cmd = python_command(root)
-  table.insert(cmd, script_path)
-  vim.system(cmd, { cwd = root, text = true }, function(result)
-    vim.schedule(function()
-      vim.fn.delete(script_path)
-      callback(result)
+local function execute(bufnr, selected_indexes, callback)
+  local cells = parser.parse_buffer(bufnr)
+  if #cells == 0 then
+    callback(false, "No Marimo cells found")
+    return
+  end
+
+  transport.ensure_connected(bufnr, function(ok, result)
+    if not ok then
+      callback(false, result or "Failed to connect to Marimo server")
+      return
+    end
+
+    transport.ensure_instantiated(bufnr, function(instantiated_ok, instantiate_err)
+      if not instantiated_ok then
+        callback(false, instantiate_err or "Failed to instantiate Marimo notebook")
+        return
+      end
+
+      local backend_ids = transport.get_cell_ids(bufnr)
+      if #cells ~= #backend_ids then
+        callback(false, ("Notebook structure changed: local cells=%d, marimo cells=%d"):format(#cells, #backend_ids))
+        return
+      end
+
+      local request_backend_ids = {}
+      local request_codes = {}
+      for _, index in ipairs(selected_indexes) do
+        local cell = cells[index]
+        if not cell then
+          callback(false, "No Marimo cell under cursor")
+          return
+        end
+        request_backend_ids[#request_backend_ids + 1] = backend_ids[index]
+        request_codes[#request_codes + 1] = cell.code
+      end
+
+      transport.send_run(bufnr, request_backend_ids, request_codes, function(run_ok, payload)
+        if not run_ok then
+          callback(false, payload)
+          return
+        end
+
+        local items, convert_err = convert_result(bufnr, payload.touched, payload.cells)
+        if not items then
+          callback(false, convert_err)
+          return
+        end
+        callback(true, items)
+      end)
     end)
   end)
 end
 
 function M.run_cell(bufnr, cell_index, callback)
   local cells = parser.parse_buffer(bufnr)
-  local cell = cells[cell_index]
-  if not cell then
+  if not cells[cell_index] then
     callback(false, "No Marimo cell under cursor")
     return
   end
-  local root = util.find_root(util.buf_path(bufnr))
-  run_python(root, build_runner_script(cells, cell_index), function(result)
-    if result.code ~= 0 then
-      callback(false, result.stderr ~= "" and result.stderr or result.stdout)
-      return
-    end
-    local ok, decoded = pcall(vim.json.decode, result.stdout)
-    if not ok then
-      callback(false, "Failed to decode executor output")
-      return
-    end
-    callback(true, decoded)
-  end)
+  execute(bufnr, { cell_index }, callback)
 end
 
 function M.run_all(bufnr, callback)
@@ -90,19 +94,11 @@ function M.run_all(bufnr, callback)
     callback(false, "No Marimo cells found")
     return
   end
-  local root = util.find_root(util.buf_path(bufnr))
-  run_python(root, build_runner_script(cells, nil), function(result)
-    if result.code ~= 0 then
-      callback(false, result.stderr ~= "" and result.stderr or result.stdout)
-      return
-    end
-    local ok, decoded = pcall(vim.json.decode, result.stdout)
-    if not ok then
-      callback(false, "Failed to decode executor output")
-      return
-    end
-    callback(true, decoded)
-  end)
+  local indexes = {}
+  for index = 1, #cells do
+    indexes[#indexes + 1] = index
+  end
+  execute(bufnr, indexes, callback)
 end
 
 return M

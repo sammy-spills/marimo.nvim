@@ -2,6 +2,7 @@ local config = require("marimo.config")
 local output = require("marimo.output")
 local executor = require("marimo.executor")
 local parser = require("marimo.parser")
+local transport = require("marimo.transport")
 local util = require("marimo.util")
 
 local M = {
@@ -20,17 +21,19 @@ local function session_for(bufnr)
 end
 
 local function start_job(bufnr, mode)
-  local opts = config.get()
   local session = session_for(bufnr)
-  local cmd = {
-    opts.commands.uvx,
-    opts.commands.marimo,
-    "edit",
-  }
+  local cmd = M._build_start_command(session.file)
+
+  if not cmd then
+    session.status = "failed"
+    util.notify("Neither `uv` nor `uvx` is available on PATH", vim.log.levels.ERROR)
+    return false
+  end
+
   if mode == "watch" then
     table.insert(cmd, "--watch")
   end
-  if opts.commands.headless then
+  if config.get().commands.headless then
     table.insert(cmd, "--headless")
   end
   table.insert(cmd, session.file)
@@ -42,8 +45,12 @@ local function start_job(bufnr, mode)
   session.job = vim.fn.jobstart(cmd, {
     cwd = session.root,
     detach = false,
+    on_stdout = function(_, data)
+      transport.observe_server_output(bufnr, data)
+    end,
     on_exit = function(_, code)
       vim.schedule(function()
+        transport.reset(bufnr)
         session.status = code == 0 and "inactive" or "failed"
         if code ~= 0 then
           util.notify(("Marimo %s session exited with code %d"):format(mode, code), vim.log.levels.WARN)
@@ -73,15 +80,37 @@ local function start_job(bufnr, mode)
   return true
 end
 
+function M._build_start_command(path)
+  local opts = config.get()
+  local uv_project_root = util.find_uv_project_root(path)
+
+  if uv_project_root and util.command_exists(opts.commands.uv) then
+    return {
+      opts.commands.uv,
+      "run",
+      "--project",
+      uv_project_root,
+      opts.commands.marimo,
+      "edit",
+    }
+  end
+
+  if util.command_exists(opts.commands.uvx) then
+    return {
+      opts.commands.uvx,
+      opts.commands.marimo,
+      "edit",
+    }
+  end
+
+  return nil
+end
+
 function M.start(bufnr, mode)
   local session = session_for(bufnr)
   if session.status == "running" and session.mode == mode and session.job and vim.fn.jobwait({ session.job }, 0)[1] == -1 then
     util.notify(("Marimo %s server already running"):format(mode))
     return true
-  end
-  if not util.command_exists(config.get().commands.uvx) then
-    util.notify("`uvx` is not available on PATH", vim.log.levels.ERROR)
-    return false
   end
   session.file = util.buf_path(bufnr)
   return start_job(bufnr, mode)
@@ -92,6 +121,7 @@ function M.stop(bufnr)
   if session.job and vim.fn.jobwait({ session.job }, 0)[1] == -1 then
     vim.fn.jobstop(session.job)
   end
+  transport.reset(bufnr)
   session.status = "inactive"
   session.job = nil
   session.mode = nil
@@ -101,6 +131,7 @@ function M.restart_kernel(bufnr)
   local session = session_for(bufnr)
   session.status = "restarting"
   output.clear(bufnr)
+  transport.reset(bufnr)
   session.last_run = nil
   session.status = session.job and "running" or "inactive"
   util.notify("Kernel state reset for current notebook")

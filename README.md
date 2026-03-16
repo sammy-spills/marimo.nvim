@@ -54,5 +54,6 @@ Lazy.nvim / LazyVim:
 - Marimo notebooks stay as `python` filetype buffers. The plugin enables a buffer-local Marimo mode.
 - Detection uses file heuristics first and then confirms with `uvx marimo check`.
 - The Marimo server is started with `--headless` by default so Neovim stays the primary editing surface.
+- Server startup prefers `uv run marimo ...` when the current buffer lives inside a `uv` project (`pyproject.toml` or `uv.lock`), and falls back to `uvx marimo ...` otherwise.
 - Output previews render as non-focusable inline floats, with `<leader>mo` still opening a focused view for the current cell.
 - Output rendering supports text, tracebacks, simple tables, and image/HTML placeholders in V1.

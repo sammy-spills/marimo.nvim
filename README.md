@@ -15,11 +15,12 @@ V1 focuses on:
 Lazy.nvim / LazyVim:
 
 ```lua
-{
-  "sammy-spills/marimo.nvim",
-  ft = "python",
-  opts = {},
-  keys = require("marimo").lazy_keys(),
+return {
+  {
+    "sammy-spills/marimo.nvim",
+    ft = "python",
+    opts = {},
+  },
 }
 ```
 

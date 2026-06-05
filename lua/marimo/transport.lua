@@ -143,6 +143,28 @@ local function run_curl(args, callback)
   end)
 end
 
+local function extract_server_token(text)
+  if not text or text == "" then
+    return nil
+  end
+  
+  local patterns = {
+    [["serverToken"%s*:%s*"([^"]*)"]],
+    [[serverToken%s*:%s*'([^']*)']],
+    [["server_token"%s*:%s*"([^"]*)"]],
+    [[server_token%s*:%s*'([^']*)']],
+  }
+  
+  for _, pattern in ipairs(patterns) do
+    local token = text:match(pattern)
+    if token then
+      return token
+    end
+  end
+  
+  return nil
+end
+
 local function fetch_server_token(bufnr, callback)
   local state = state_for(bufnr)
   if state.server_token ~= nil then
@@ -158,17 +180,20 @@ local function fetch_server_token(bufnr, callback)
     return
   end
 
+  util.notify("Fetching server token from: " .. state.startup_url, vim.log.levels.DEBUG)
   run_curl({ "-fsSL", state.startup_url }, function(result)
     if result.code ~= 0 then
       callback(false, result.stderr ~= "" and result.stderr or result.stdout)
       return
     end
-    local token = result.stdout:match([["serverToken"%s*:%s*"([^"]*)"]])
+    local token = extract_server_token(result.stdout)
     if token == nil then
+      util.notify("Server startup response (first 200 chars): " .. result.stdout:sub(1, 200) .. "...", vim.log.levels.DEBUG)
       callback(false, "Failed to discover Marimo server token")
       return
     end
     state.server_token = token
+    util.notify("Successfully discovered server token", vim.log.levels.DEBUG)
     callback(true)
   end)
 end
@@ -577,7 +602,16 @@ function M.observe_server_output(bufnr, data)
         state.base_url = url:gsub("%?.*$", ""):gsub("/+$", "")
         state.access_token = url:match("[?&]access_token=([^&]+)")
         state.base_path = parsed and parsed.base_path or ""
-        bootstrap_connection(bufnr)
+        vim.schedule(function()
+          bootstrap_connection(bufnr)
+        end)
+      else
+        local clean_line = line:gsub("[%s%c]+", " ")
+        if clean_line ~= "" then
+          vim.schedule(function()
+            util.notify("Marimo server output: " .. clean_line, vim.log.levels.DEBUG)
+          end)
+        end
       end
     end
   end
